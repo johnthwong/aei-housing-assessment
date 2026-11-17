@@ -1,11 +1,14 @@
 ---
 title: "AVM Accuracy"
 format: html
+execute:
+  echo: false
+  warning: false
+  message: false
 ---
 
 ```{r}
 #| label: setup
-#| message: false
 library(tidyverse)
 
 setwd(here::here())
@@ -38,8 +41,7 @@ matched <- data_assessor_month |>
   ) |>
   mutate(
     deed_price = as.numeric(SaleAmt),
-    assessor_error = CurrentAVMValue - deed_price,
-    standalone_error = FinalValue - deed_price
+    avm_error = FinalValue - deed_price
   ) |>
   filter(!is.na(deed_price) & deed_price > 0)
 ```
@@ -48,53 +50,34 @@ matched <- data_assessor_month |>
 #| label: bias-histogram
 #| fig-width: 8
 #| fig-height: 5
-errors <- matched |>
-  select(PropertyID, assessor_error, standalone_error) |>
-  pivot_longer(
-    cols = c(assessor_error, standalone_error),
-    names_to = "source",
-    values_to = "error"
-  ) |>
-  mutate(source = case_match(
-    source,
-    "assessor_error" ~ "Assessor AVM",
-    "standalone_error" ~ "Standalone AVM"
-  ))
-
-ggplot(errors, aes(x = error, fill = source)) +
-  geom_histogram(bins = 50, alpha = 0.7, position = "identity") +
+ggplot(matched, aes(x = avm_error)) +
+  geom_histogram(bins = 50, fill = "steelblue", alpha = 0.8) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   scale_x_continuous(labels = scales::dollar_format()) +
   labs(
     x = "AVM - Deed Sale Price",
-    y = "Count",
-    fill = NULL
+    y = "Count"
   ) +
-  theme_minimal() +
-  theme(legend.position = "top")
+  theme_minimal()
 ```
 
 ```{r}
 #| label: accuracy-table
 median_price <- median(matched$deed_price, na.rm = TRUE)
 
-compute_metrics <- function(avm_col, deed_col, label) {
-  both <- !is.na(avm_col) & !is.na(deed_col)
-  errors <- avm_col[both] - deed_col[both]
-  abs_errors <- abs(errors)
-  tibble(
-    Source = label,
-    N = sum(both),
-    `MAE` = scales::dollar(round(mean(abs_errors))),
-    `MAE (% median)` = sprintf("%.1f%%", 100 * mean(abs_errors) / median_price),
-    `MAPE` = sprintf("%.1f%%", mean(abs_errors / deed_col[both]) * 100),
-    `Mean Bias` = scales::dollar(round(mean(errors)))
-  )
-}
+both <- !is.na(matched$FinalValue) & !is.na(matched$deed_price)
+errors <- matched$FinalValue[both] - matched$deed_price[both]
+abs_errors <- abs(errors)
 
-bind_rows(
-  compute_metrics(matched$CurrentAVMValue, matched$deed_price, "Assessor AVM"),
-  compute_metrics(matched$FinalValue, matched$deed_price, "Standalone AVM")
+tibble(
+  Metric = c("N", "MAE", "MAE (% median)", "MAPE", "Mean Bias"),
+  Value = c(
+    format(sum(both), big.mark = ","),
+    scales::dollar(round(mean(abs_errors))),
+    sprintf("%.1f%%", 100 * mean(abs_errors) / median_price),
+    sprintf("%.1f%%", mean(abs_errors / matched$deed_price[both]) * 100),
+    scales::dollar(round(mean(errors)))
+  )
 ) |>
   knitr::kable()
 ```
