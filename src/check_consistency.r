@@ -16,9 +16,19 @@ if ("Fips" %in% names(data_avm) && !"FIPS" %in% names(data_avm)) {
   data_avm <- rename(data_avm, FIPS = Fips)
 }
 
+median_price <- median(data_assessor$CurrentSalesPrice, na.rm = TRUE)
+cat(sprintf("Median home price (assessor CurrentSalesPrice): $%s\n",
+  format(median_price, big.mark = ",")))
+
+format_mae <- function(mae, median_price) {
+  sprintf("$%s (%.1f%% of median)",
+    format(round(mae), big.mark = ","),
+    100 * mae / median_price)
+}
+
 # -- 1. AVM deviation: assessor vs standalone AVM ----------------------------
 
-check_avm_deviation <- function(assessor, avm) {
+check_avm_deviation <- function(assessor, avm, median_price) {
   cat("\n", strrep("=", 60), "\n")
   cat("AVM DEVIATION: assessor vs standalone AVM\n")
   cat(strrep("=", 60), "\n\n")
@@ -41,9 +51,9 @@ check_avm_deviation <- function(assessor, avm) {
     list("vStandardDeviation", "StandardDeviation")
   )
 
-  cat(sprintf("%-25s %25s %8s %10s %12s\n",
-    "assessor field", "avm field", "n_diff", "pct_diff", "mean_abs_diff"))
-  cat(strrep("-", 82), "\n")
+  cat(sprintf("%-22s %-18s %8s %8s %s\n",
+    "assessor", "avm", "n_diff", "pct_diff", "MAE"))
+  cat(strrep("-", 90), "\n")
 
   for (pair in field_pairs) {
     a <- joined[[pair[[1]]]]
@@ -51,29 +61,28 @@ check_avm_deviation <- function(assessor, avm) {
     both_present <- !is.na(a) & !is.na(b)
     n_compare <- sum(both_present)
     if (n_compare == 0) {
-      cat(sprintf("%-25s %25s %8s %10s %12s\n",
+      cat(sprintf("%-22s %-18s %8s %8s %s\n",
         pair[[1]], pair[[2]], "0", "NA", "NA"))
       next
     }
     diffs <- a[both_present] != b[both_present]
     n_diff <- sum(diffs)
     pct_diff <- round(100 * n_diff / n_compare, 1)
-    mean_abs <- round(mean(abs(a[both_present] - b[both_present])), 2)
-    cat(sprintf("%-25s %25s %8s %9.1f%% %12s\n",
+    mae <- mean(abs(a[both_present] - b[both_present]))
+    cat(sprintf("%-22s %-18s %8s %7.1f%% %s\n",
       pair[[1]], pair[[2]],
       format(n_diff, big.mark = ","),
       pct_diff,
-      format(mean_abs, big.mark = ",")))
+      format_mae(mae, median_price)))
   }
 
-  # Valuation date comparison (character vs Date)
   a_date <- as.Date(joined$vValuationDate, format = "%Y%m%d")
   b_date <- joined$ValuationDate
   both_present <- !is.na(a_date) & !is.na(b_date)
   n_compare <- sum(both_present)
   n_diff <- sum(a_date[both_present] != b_date[both_present])
   pct_diff <- if (n_compare > 0) round(100 * n_diff / n_compare, 1) else NA
-  cat(sprintf("%-25s %25s %8s %9s%%\n",
+  cat(sprintf("%-22s %-18s %8s %7s%%\n",
     "vValuationDate", "ValuationDate",
     format(n_diff, big.mark = ","),
     if (is.na(pct_diff)) "NA" else format(pct_diff, nsmall = 1)))
@@ -82,19 +91,37 @@ check_avm_deviation <- function(assessor, avm) {
 
 # -- 2. Transaction match: assessor vs deed ---------------------------------
 
-check_transactions <- function(assessor, deed, assessor_name) {
+check_transactions <- function(assessor, deed, assessor_name, median_price) {
   cat("\n", strrep("=", 60), "\n")
   cat(sprintf("TRANSACTION MATCH: %s vs deed\n", assessor_name))
   cat(strrep("=", 60), "\n\n")
+
+  compare_field <- function(a, b, label) {
+    both <- !is.na(a) & !is.na(b)
+    n <- sum(both)
+    if (n == 0) return(cat(sprintf("  %-30s no overlap\n", label)))
+    n_match <- sum(as.character(a[both]) == as.character(b[both]))
+    cat(sprintf("  %-30s %s / %s match (%.1f%%)\n",
+      label, format(n_match, big.mark = ","), format(n, big.mark = ","),
+      100 * n_match / n))
+  }
+
+  compute_price_mae <- function(a, b) {
+    a <- as.numeric(a)
+    b <- as.numeric(b)
+    both <- !is.na(a) & !is.na(b)
+    if (sum(both) == 0) return(NULL)
+    return(mean(abs(a[both] - b[both])))
+  }
+
+  deed_txn <- deed |>
+    select(PropertyID, FATransactionID, RecordingDate, SaleAmt, DocumentType)
 
   # Current sale
   current <- assessor |>
     filter(!is.na(CurrentSaleTransactionId)) |>
     select(PropertyID, CurrentSaleTransactionId, CurrentSaleRecordingDate,
       CurrentSalesPrice, CurrentSaleDocumentType)
-
-  deed_txn <- deed |>
-    select(PropertyID, FATransactionID, RecordingDate, SaleAmt, DocumentType)
 
   current_joined <- inner_join(
     current, deed_txn,
@@ -111,22 +138,18 @@ check_transactions <- function(assessor, deed, assessor_name) {
     format(nrow(current) - nrow(current_joined), big.mark = ",")))
 
   if (nrow(current_joined) > 0) {
-    compare_field <- function(a, b, label) {
-      both <- !is.na(a) & !is.na(b)
-      n <- sum(both)
-      if (n == 0) return(cat(sprintf("  %-30s no overlap\n", label)))
-      n_match <- sum(as.character(a[both]) == as.character(b[both]))
-      cat(sprintf("  %-30s %s / %s match (%.1f%%)\n",
-        label, format(n_match, big.mark = ","), format(n, big.mark = ","),
-        100 * n_match / n))
-    }
-
     compare_field(current_joined$CurrentSaleRecordingDate,
       current_joined$RecordingDate, "RecordingDate")
     compare_field(current_joined$CurrentSalesPrice,
       as.numeric(current_joined$SaleAmt), "SalesPrice")
     compare_field(current_joined$CurrentSaleDocumentType,
       current_joined$DocumentType, "DocumentType")
+
+    mae <- compute_price_mae(current_joined$CurrentSalesPrice,
+      current_joined$SaleAmt)
+    if (!is.null(mae)) {
+      cat(sprintf("  %-30s %s\n", "SalesPrice MAE", format_mae(mae, median_price)))
+    }
   }
 
   # Previous sale
@@ -156,11 +179,17 @@ check_transactions <- function(assessor, deed, assessor_name) {
       as.numeric(previous_joined$SaleAmt), "SalesPrice")
     compare_field(previous_joined$PrevSaleDocumentType,
       previous_joined$DocumentType, "DocumentType")
+
+    mae <- compute_price_mae(previous_joined$PrevSalesPrice,
+      previous_joined$SaleAmt)
+    if (!is.null(mae)) {
+      cat(sprintf("  %-30s %s\n", "SalesPrice MAE", format_mae(mae, median_price)))
+    }
   }
 
   cat("\n")
 }
 
-check_avm_deviation(data_assessor, data_avm)
-check_transactions(data_assessor_month, data_deed, "assessor_month")
-check_transactions(data_assessor, data_deed, "assessor")
+check_avm_deviation(data_assessor, data_avm, median_price)
+check_transactions(data_assessor_month, data_deed, "assessor_month", median_price)
+check_transactions(data_assessor, data_deed, "assessor", median_price)
