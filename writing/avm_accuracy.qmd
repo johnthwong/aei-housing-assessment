@@ -126,4 +126,8 @@ ggplot(matched, aes(x = avm_error)) +
   theme_minimal()
 ```
 
-###
+### Memo
+
+I'm not sure where the AVM data is sourced, but I think it's important to produce predictions of price that are accurate. To be honest, the choice of analysis was also a function of time and the surface-level familiarity I had developed over an hour of looking at the data. 
+
+The next step I would've done would be to fit a decision tree with an algorithm like random forest on the assesor dataset. 
