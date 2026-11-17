@@ -1,6 +1,8 @@
 ---
 title: "AVM Accuracy"
-format: html
+format:
+  html:
+    embed-resources: true
 execute:
   echo: false
   warning: false
