@@ -1,6 +1,7 @@
 unzip_data <- function(path, name) {
+  extracted <- unzip(path, exdir = tempdir(), overwrite = TRUE)
   data <- data.table::fread(
-    unzip(path, exdir = tempdir()),
+    extracted,
     sep = "|", colClasses = "character"
   ) |>
     as.data.frame()
