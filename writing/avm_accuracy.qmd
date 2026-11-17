@@ -92,3 +92,22 @@ tibble(
 ) |>
   knitr::kable()
 ```
+
+It looks the frequency of the deviation is slightly right-skewed, but it looks like three-quarters of values fall within +/- $100,000.
+
+```{r}
+#| label: bias-histogram
+#| fig-width: 8
+#| fig-height: 5
+ggplot(matched, aes(x = avm_error)) +
+  geom_histogram(bins = 50, fill = "steelblue", alpha = 0.8) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  scale_x_continuous(labels = scales::dollar_format()) +
+  labs(
+    x = "AVM - Deed Sale Price",
+    y = "Count"
+  ) +
+  theme_minimal()
+```
+
+###
