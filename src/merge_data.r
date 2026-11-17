@@ -7,10 +7,10 @@ dict_assessor <- read_csv("data/dictionary_assessor.csv", show_col_types = FALSE
 dict_deed <- read_csv("data/dictionary_deed.csv", show_col_types = FALSE)
 dict_avm <- read_csv("data/dictionary_avm.csv", show_col_types = FALSE)
 
-data_assessor <- apply_types(data_assessor, dict_assessor)
-data_assessor_month <- apply_types(data_assessor_month, dict_assessor)
-data_deed <- apply_types(data_deed, dict_deed)
-data_avm <- apply_types(data_avm, dict_avm)
+data_assessor <- apply_types(data_assessor, dict_assessor, "output/assessor.csv")
+data_assessor_month <- apply_types(data_assessor_month, dict_assessor, "output/assessor_month.csv")
+data_deed <- apply_types(data_deed, dict_deed, "output/deed.csv")
+data_avm <- apply_types(data_avm, dict_avm, "output/avm.csv")
 
 # AVM dictionary uses "Fips"; assessor and deed use "FIPS"
 if ("Fips" %in% names(data_avm) && !"FIPS" %in% names(data_avm)) {
