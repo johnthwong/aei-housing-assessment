@@ -69,18 +69,25 @@ both <- !is.na(matched$FinalValue) & !is.na(matched$deed_price)
 errors <- matched$FinalValue[both] - matched$deed_price[both]
 abs_errors <- abs(errors)
 
+within_100k <- sum(abs(errors) <= 100000)
+pct_within_100k <- 100 * within_100k / sum(both)
+
 tibble(
   Metric = c(
     "Properties compared",
     "Mean absolute error",
     "Mean absolute error (% of median sale price)",
-    "Mean bias"
+    "Mean bias",
+    "Within +/- $100,000",
+    "Within +/- $100,000 (%)"
   ),
   Value = c(
     format(sum(both), big.mark = ","),
     scales::dollar(round(mean(abs_errors))),
     sprintf("%.1f%%", 100 * mean(abs_errors) / median_price),
-    scales::dollar(round(mean(errors)))
+    scales::dollar(round(mean(errors))),
+    format(within_100k, big.mark = ","),
+    sprintf("%.1f%%", pct_within_100k)
   )
 ) |>
   knitr::kable()
