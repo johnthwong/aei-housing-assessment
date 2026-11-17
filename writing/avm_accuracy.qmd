@@ -1,8 +1,6 @@
 ---
 title: "AEI Housing Assessment"
-format:
-  html:
-    embed-resources: true
+format: docx
 execute:
   echo: false
   warning: false
