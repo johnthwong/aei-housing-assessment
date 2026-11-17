@@ -13,7 +13,7 @@ parse_sql_type <- function(type_str) {
   )
 }
 
-apply_types <- function(df, dict) {
+apply_types <- function(df, dict, write_csv_path = NULL) {
   dict <- dict |>
     filter(field_name %in% names(df)) |>
     mutate(r_type = parse_sql_type(type))
@@ -26,6 +26,11 @@ apply_types <- function(df, dict) {
     } else if (r_type == "date") {
       df[[col]] <- suppressWarnings(as.Date(df[[col]], format = "%Y%m%d"))
     }
+  }
+
+  if (!is.null(write_csv_path)) {
+    dir.create(dirname(write_csv_path), recursive = TRUE, showWarnings = FALSE)
+    write_csv(df, write_csv_path)
   }
 
   return(df)
