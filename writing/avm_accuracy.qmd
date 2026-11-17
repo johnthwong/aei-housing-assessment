@@ -172,13 +172,18 @@ avm_joined <- inner_join(
 compare_pair <- function(a, b, label) {
   both <- !is.na(a) & !is.na(b)
   n <- sum(both)
-  if (n == 0) return(tibble(Field = label, Compared = 0, Different = 0, `Pct different` = "NA"))
+  if (n == 0) {
+    return(tibble(Field = label, Compared = "0",
+      Different = "0", `Pct different` = "NA", `Mean absolute error` = "NA"))
+  }
   n_diff <- sum(a[both] != b[both])
+  mae <- mean(abs(a[both] - b[both]))
   tibble(
     Field = label,
     Compared = format(n, big.mark = ","),
     Different = format(n_diff, big.mark = ","),
-    `Pct different` = sprintf("%.1f%%", 100 * n_diff / n)
+    `Pct different` = sprintf("%.1f%%", 100 * n_diff / n),
+    `Mean absolute error` = format(round(mae, 2), big.mark = ",")
   )
 }
 
@@ -193,6 +198,51 @@ bind_rows(
 ```
 
 #### Less than 5% of assessor annual data matches to deed
+
+```{r}
+#| label: annual-deed-match
+annual_current <- data_assessor |>
+  filter(!is.na(CurrentSaleTransactionId))
+
+annual_current_matched <- inner_join(
+  annual_current |> select(PropertyID, CurrentSaleTransactionId),
+  data_deed |> select(PropertyID, FATransactionID),
+  by = c("PropertyID" = "PropertyID",
+    "CurrentSaleTransactionId" = "FATransactionID")
+)
+
+annual_prev <- data_assessor |>
+  filter(!is.na(PrevSaleTransactionId))
+
+annual_prev_matched <- inner_join(
+  annual_prev |> select(PropertyID, PrevSaleTransactionId),
+  data_deed |> select(PropertyID, FATransactionID),
+  by = c("PropertyID" = "PropertyID",
+    "PrevSaleTransactionId" = "FATransactionID")
+)
+
+tibble(
+  Metric = c(
+    "Annual assessor rows",
+    "With current transaction ID",
+    "Current transaction matched to deed",
+    "Current transaction match rate",
+    "With previous transaction ID",
+    "Previous transaction matched to deed",
+    "Previous transaction match rate"
+  ),
+  Value = c(
+    format(nrow(data_assessor), big.mark = ","),
+    format(nrow(annual_current), big.mark = ","),
+    format(nrow(annual_current_matched), big.mark = ","),
+    sprintf("%.1f%%", 100 * nrow(annual_current_matched) / nrow(annual_current)),
+    format(nrow(annual_prev), big.mark = ","),
+    format(nrow(annual_prev_matched), big.mark = ","),
+    sprintf("%.1f%%", 100 * nrow(annual_prev_matched) / nrow(annual_prev))
+  )
+) |>
+  knitr::kable()
+```
 
 
 ## Product
