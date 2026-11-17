@@ -64,9 +64,9 @@ pairs <- list(
   list(data_avm, data_assessor_month, "avm", "assessor_month")
 )
 
-cat("MERGE DIAGNOSTICS (by FIPS)\n")
+cat("MERGE DIAGNOSTICS (by PropertyID)\n")
 cat(strrep("=", 50), "\n")
 
 for (p in pairs) {
-  check_merge(p[[1]], p[[2]], p[[3]], p[[4]], "FIPS")
+  check_merge(p[[1]], p[[2]], p[[3]], p[[4]], "PropertyID")
 }
