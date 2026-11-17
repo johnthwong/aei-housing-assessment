@@ -8,14 +8,14 @@ format: html
 #| message: false
 library(tidyverse)
 
-knitr::opts_knit$set(root.dir = here::here())
+setwd(here::here())
 
-source(here::here("src/unzip_data.r"))
-source(here::here("src/apply_types.r"))
+source("src/unzip_data.r")
+source("src/apply_types.r")
 
-dict_assessor <- read_csv(here::here("data/dictionary_assessor.csv"), show_col_types = FALSE)
-dict_deed <- read_csv(here::here("data/dictionary_deed.csv"), show_col_types = FALSE)
-dict_avm <- read_csv(here::here("data/dictionary_avm.csv"), show_col_types = FALSE)
+dict_assessor <- read_csv("data/dictionary_assessor.csv", show_col_types = FALSE)
+dict_deed <- read_csv("data/dictionary_deed.csv", show_col_types = FALSE)
+dict_avm <- read_csv("data/dictionary_avm.csv", show_col_types = FALSE)
 
 data_assessor_month <- apply_types(data_assessor_month, dict_assessor)
 data_deed <- apply_types(data_deed, dict_deed)
