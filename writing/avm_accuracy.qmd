@@ -70,12 +70,16 @@ errors <- matched$FinalValue[both] - matched$deed_price[both]
 abs_errors <- abs(errors)
 
 tibble(
-  Metric = c("N", "MAE", "MAE (% median)", "MAPE", "Mean Bias"),
+  Metric = c(
+    "Properties compared",
+    "Mean absolute error",
+    "Mean absolute error (% of median sale price)",
+    "Mean bias"
+  ),
   Value = c(
     format(sum(both), big.mark = ","),
     scales::dollar(round(mean(abs_errors))),
     sprintf("%.1f%%", 100 * mean(abs_errors) / median_price),
-    sprintf("%.1f%%", mean(abs_errors / matched$deed_price[both]) * 100),
     scales::dollar(round(mean(errors)))
   )
 ) |>
