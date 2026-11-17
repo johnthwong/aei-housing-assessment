@@ -20,6 +20,7 @@ dict_assessor <- read_csv("data/dictionary_assessor.csv", show_col_types = FALSE
 dict_deed <- read_csv("data/dictionary_deed.csv", show_col_types = FALSE)
 dict_avm <- read_csv("data/dictionary_avm.csv", show_col_types = FALSE)
 
+data_assessor <- apply_types(data_assessor, dict_assessor)
 data_assessor_month <- apply_types(data_assessor_month, dict_assessor)
 data_deed <- apply_types(data_deed, dict_deed)
 data_avm <- apply_types(data_avm, dict_avm)
@@ -50,25 +51,144 @@ matched <- data_assessor_month |>
 
 I used `PropertyID` as the join key. It appears in most pairwise matches the same `PropertyID` appears in both datasets more than assessor's parcel number.
 
-[insert table]
+```{r}
+#| label: merge-diagnostics
+datasets_list <- list(
+  assessor = data_assessor,
+  assessor_month = data_assessor_month,
+  deed = data_deed,
+  avm = data_avm
+)
+
+pairs <- list(
+  c("assessor", "deed"),
+  c("assessor", "avm"),
+  c("assessor", "assessor_month"),
+  c("deed", "avm"),
+  c("deed", "assessor_month"),
+  c("avm", "assessor_month")
+)
+
+map_dfr(pairs, \(p) {
+  left <- datasets_list[[p[1]]]
+  right <- datasets_list[[p[2]]]
+  keys_left <- left$PropertyID
+  keys_right <- right$PropertyID
+  tibble(
+    Left = p[1],
+    Right = p[2],
+    `Left rows` = format(nrow(left), big.mark = ","),
+    `Right rows` = format(nrow(right), big.mark = ","),
+    `Left distinct keys` = format(n_distinct(keys_left), big.mark = ","),
+    `Right distinct keys` = format(n_distinct(keys_right), big.mark = ","),
+    `Shared keys` = format(length(intersect(unique(keys_left), unique(keys_right))), big.mark = ",")
+  )
+}) |>
+  knitr::kable()
+```
 
 Deed data has non-unique `PropertyID`. I presume this is because some properties are transacted multiple times.
 
-[insert table]
+```{r}
+#| label: deed-duplicates
+deed_counts <- data_deed |>
+  count(PropertyID, name = "transactions") |>
+  count(transactions, name = "properties")
+
+deed_counts |>
+  mutate(properties = format(properties, big.mark = ",")) |>
+  knitr::kable(col.names = c("Transactions per PropertyID", "Properties"))
+```
 
 It looks like the monthly data contains only a subset of properties in the annual file.
 
-[insert table]
+```{r}
+#| label: monthly-vs-annual
+annual_ids <- unique(data_assessor$PropertyID)
+monthly_ids <- unique(data_assessor_month$PropertyID)
+
+tibble(
+  Metric = c(
+    "Annual assessor properties",
+    "Monthly assessor properties",
+    "In both",
+    "Only in annual",
+    "Only in monthly"
+  ),
+  Count = format(c(
+    length(annual_ids),
+    length(monthly_ids),
+    length(intersect(annual_ids, monthly_ids)),
+    length(setdiff(annual_ids, monthly_ids)),
+    length(setdiff(monthly_ids, annual_ids))
+  ), big.mark = ",")
+) |>
+  knitr::kable()
+```
 
 ### Data quality issues
 
 #### There are some properties being transacted that are not in the assessor dataset
 
-[insert table]
+```{r}
+#| label: unmatched-deed
+deed_ids <- unique(data_deed$PropertyID)
+assessor_ids <- unique(data_assessor$PropertyID)
+monthly_ids <- unique(data_assessor_month$PropertyID)
+
+tibble(
+  Metric = c(
+    "Deed properties",
+    "Matched to annual assessor",
+    "Matched to monthly assessor",
+    "Not in annual assessor",
+    "Not in monthly assessor"
+  ),
+  Count = format(c(
+    length(deed_ids),
+    length(intersect(deed_ids, assessor_ids)),
+    length(intersect(deed_ids, monthly_ids)),
+    length(setdiff(deed_ids, assessor_ids)),
+    length(setdiff(deed_ids, monthly_ids))
+  ), big.mark = ",")
+) |>
+  knitr::kable()
+```
 
 #### Automated valuation model (AVM) estimates in the assessor data does not match that in the AVM data
 
-[indert table]
+```{r}
+#| label: avm-deviation
+avm_joined <- inner_join(
+  data_assessor |> select(PropertyID, CurrentAVMValue, vLowValue, vHighValue,
+    vConfidenceScore, vStandardDeviation),
+  data_avm |> select(PropertyID, FinalValue, LowValue, HighValue,
+    ConfidenceScore, StandardDeviation),
+  by = "PropertyID"
+)
+
+compare_pair <- function(a, b, label) {
+  both <- !is.na(a) & !is.na(b)
+  n <- sum(both)
+  if (n == 0) return(tibble(Field = label, Compared = 0, Different = 0, `Pct different` = "NA"))
+  n_diff <- sum(a[both] != b[both])
+  tibble(
+    Field = label,
+    Compared = format(n, big.mark = ","),
+    Different = format(n_diff, big.mark = ","),
+    `Pct different` = sprintf("%.1f%%", 100 * n_diff / n)
+  )
+}
+
+bind_rows(
+  compare_pair(avm_joined$CurrentAVMValue, avm_joined$FinalValue, "AVM value"),
+  compare_pair(avm_joined$vLowValue, avm_joined$LowValue, "Low value"),
+  compare_pair(avm_joined$vHighValue, avm_joined$HighValue, "High value"),
+  compare_pair(avm_joined$vConfidenceScore, avm_joined$ConfidenceScore, "Confidence score"),
+  compare_pair(avm_joined$vStandardDeviation, avm_joined$StandardDeviation, "Standard deviation")
+) |>
+  knitr::kable()
+```
 
 #### Less than 5% of assessor annual data matches to deed
 
@@ -128,6 +248,6 @@ ggplot(matched, aes(x = avm_error)) +
 
 ### Memo
 
-I'm not sure where the AVM data is sourced, but I think it's important to produce predictions of price that are accurate. To be honest, the choice of analysis was also a function of time and the surface-level familiarity I had developed over an hour of looking at the data. 
+I'm not sure where the AVM data is sourced, but I think it's important to produce predictions of price that are accurate. To be honest, the choice of analysis was also a function of time and the surface-level familiarity I had developed over an hour of looking at the data.
 
-The next step I would've done would be to fit a decision tree with an algorithm like random forest on the assesor dataset. 
+The next step I would've done would be to fit a decision tree with an algorithm like random forest on the assesor dataset.
